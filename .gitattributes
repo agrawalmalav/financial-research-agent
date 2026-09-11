@@ -1,0 +1,5 @@
+# Exclude downloaded/generated artefacts from GitHub language statistics
+data/sec_reports/** linguist-generated=true
+data/news_sentiment/** linguist-generated=true
+cache/** linguist-generated=true
+results/** linguist-generated=true
