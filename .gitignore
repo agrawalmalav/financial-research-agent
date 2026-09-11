@@ -1,3 +1,9 @@
 .env
 __pycache__/
 *.pyc
+
+# Runtime / downloaded artefacts
+data/sec_reports/
+data/news_sentiment/
+cache/
+results/
