@@ -1,125 +1,200 @@
-# Finance AI Agent
+# Financial Research Agent
 
-An experimental trading assistant built with
-[LangGraph](https://github.com/langchain-ai/langgraph).  The agent collects
-market data, performs a series of analyses and then asks a language model for a
-Buy/Sell/Hold decision.
+A LangGraph-based research agent for combining market data, technical indicators, news, insider activity, peer performance and SEC filings into a structured investment research workflow.
 
-## Features
+The project is designed as a research and decision-support system rather than a black-box stock predictor. It focuses on **multi-source evidence gathering, explicit orchestration and historical evaluation**.
 
-### Data collection
+## What it does
 
-- **StockDataFetcher** – OHLCV price history using `yfinance`.
-- **NewsSentimentFetcher** – company news via Alpha Vantage with Finnhub and
-  Gemini fallback; requests are cached under `data/news_sentiment/`.
-- **InsiderDataFetcher** – recent insider transactions and sentiment from
-  Finnhub.
-- **PeerDataFetcher** – peer tickers, price data and news sentiment.
-- **SECFetcher** – downloads the latest 10‑K/10‑Q filing and stores it in
-  `data/sec_reports/`.
-
-### Analysis modules
-
-- **technical_analysis.py** – computes indicators (SMA, MACD, RSI, ATR, ADX,
-  Bollinger Bands, momentum) and returns trading signals.
-- **sentiment_analysis.py** and **cached_sentiment.py** – summarise headline
-  sentiment and cache results in `results/news_analysis/`.
-- **insider_analysis.py** – scores insider trading activity.
-- **peer_analysis.py** – compares peer performance and sentiment.
-- **sec_risk_analysis.py** – extracts risk factors and MD&A sections from SEC
-  filings and summarises them with Gemini; results are cached in
-  `cache/sec_analysis/`.
-
-### Decision
-
-- **decision_maker.py** – sends combined signals to Gemini to obtain the final
-  decision.
-
-### Utilities
-
-- **run_agent.py** – build and execute the LangGraph pipeline for a single
-  ticker.
-- **backtest_runner.py** – run the full pipeline over a date range, logging
-  prompts and reusing cached news/analysis.
-- **ablation_study.py** – replay logged prompts through ChatGPT with sections
-  removed to evaluate the importance of news or peer data.
-
-## Repository structure
-
-```
-analysis/             Sentiment, technical, insider, peer and SEC analysis
-cache/                Miscellaneous caches
-data/                 Downloaded data (news, SEC filings, etc.)
-data_sources/         Data-fetching nodes
-decision/             Final LLM decision logic
-tests/                Unit tests
-run_agent.py          Entry point for a single run
-backtest_runner.py    Backtesting over multiple days
-ablation_study.py     Prompt ablation experiment
-config.py             Helper functions to load API keys
-requirements.txt      Python dependencies
+```mermaid
+flowchart LR
+    A[Ticker + analysis date] --> B[Market data]
+    B --> C[Technical analysis]
+    C --> D[SEC filing retrieval]
+    D --> E[SEC risk + MD&A analysis]
+    E --> F[Peer data]
+    F --> G[Peer analysis]
+    G --> H[Evidence synthesis]
+    H --> I[LLM Buy / Sell / Hold decision]
 ```
 
-## Installation
+The current implementation uses a LangGraph `StateGraph` to pass structured state through each stage of the workflow.
 
-1. **Python** – requires Python 3.11+.
-2. **Dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. **Environment variables** – create a `.env` file with API keys:
-   ```ini
-   GEMINI_API_KEY=your-gemini-key
-   ALPHAVANTAGE_API_KEY=your-alpha-key
-   FINNHUB_API_KEY=your-finnhub-key
-   ```
-   The ablation script also needs `OPENAI_API_KEY`.
+## Current capabilities
 
-## Running the agent
+### Market and technical analysis
 
-Analyse a single ticker on a given day:
+- Historical OHLCV retrieval with `yfinance`
+- SMA, MACD, RSI, ATR, ADX, Bollinger Bands and momentum signals
+- Historical date support for research/backtesting runs
 
-```bash
-python run_agent.py AAPL --date 2024-05-01
-```
+### News and sentiment
 
-The script fetches price history, news, insider activity, peer data and the
-latest SEC filing.  Technical, sentiment, insider, peer and SEC analyses are
-performed before querying Gemini for a final decision.
+- Alpha Vantage news sentiment as the primary source
+- Finnhub + Gemini fallback when required
+- Cached responses to reduce repeat API calls
+- Structured sentiment summaries used in final synthesis
 
-## Backtesting and caching
+### Insider and peer research
 
-Run the pipeline across a date range.  All news responses and sentiment
-analyses are cached so subsequent runs reuse existing data.
+- Insider transaction data via Finnhub
+- Peer discovery and price comparison
+- Peer sentiment and relative performance analysis
+
+### SEC filing analysis
+
+- 10-K / 10-Q retrieval using `sec-edgar-downloader`
+- Risk-factor and MD&A extraction
+- Gemini-based summarisation and sentiment analysis
+- Cached SEC analysis for repeated runs
+
+### Decision synthesis
+
+The final stage combines the available signals and asks the model to produce a Buy / Sell / Hold recommendation.
+
+This output is intended for experimentation and model evaluation, not financial advice.
+
+## Historical evaluation
+
+The repository includes two experimentation tools beyond single-ticker execution.
+
+### Backtesting
+
+`backtest_runner.py` runs the full pipeline across historical trading days and records:
+
+- model recommendation
+- close price on the analysis date
+- subsequent 1-day, 5-day, 14-day and 30-day prices
 
 ```bash
 python backtest_runner.py AAPL --start 2024-05-01 --end 2024-05-31
 ```
 
-Prompt logs are written to `results/gemini_prompts.log` and SEC analyses are
-cached in `cache/sec_analysis/`.
+### Ablation studies
 
-## Ablation study
+`ablation_study.py` replays logged decision prompts with selected evidence removed, allowing experiments such as:
 
-To evaluate the impact of news or peer information on the model’s output, run:
+- recommendation without news evidence
+- recommendation without peer evidence
+- comparison with the complete prompt
 
-```bash
-python ablation_study.py
+The purpose is to measure whether individual information sources materially change model behaviour rather than assuming every additional signal is useful.
+
+## Tech stack
+
+- Python 3.11+
+- LangGraph
+- Gemini
+- OpenAI
+- pandas
+- yfinance
+- Finnhub
+- Alpha Vantage
+- SEC EDGAR
+- BeautifulSoup / pdfplumber
+- `ta`
+- pytest
+
+## Repository structure
+
+```text
+analysis/                Technical, sentiment, insider, peer and SEC analysis
+data_sources/            External data integrations
+decision/                Final model decision logic
+tests/                   Unit tests
+run_agent.py             LangGraph pipeline for a single analysis date
+backtest_runner.py       Historical experiment runner
+ablation_study.py        Evidence ablation experiments
+config.py                Environment/API configuration
+data/                     Runtime-downloaded data and caches
+cache/                    Cached analysis artefacts
+results/                  Experiment outputs
 ```
 
-The script reads `results/gemini_prompts.log`, removes selected sections and
-re-sends the prompts to ChatGPT, writing predictions to
-`results/ablation_predictions.csv`.
+## Quick start
+
+### 1. Install dependencies
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 2. Configure API keys
+
+Create a `.env` file containing the providers you want to use:
+
+```ini
+GEMINI_API_KEY=your-gemini-key
+ALPHAVANTAGE_API_KEY=your-alpha-vantage-key
+FINNHUB_API_KEY=your-finnhub-key
+OPENAI_API_KEY=your-openai-key
+```
+
+`OPENAI_API_KEY` is currently used by the ablation tooling.
+
+### 3. Run the agent
+
+Current date:
+
+```bash
+python run_agent.py AAPL
+```
+
+Historical date:
+
+```bash
+python run_agent.py AAPL --date 2024-05-01
+```
 
 ## Testing
-
-Unit tests cover the main analysis components and can be run with:
 
 ```bash
 pytest
 ```
 
-## License
+The current test suite covers core data-fetching, parsing, sentiment and technical-analysis behaviour.
 
-This project is provided for educational purposes and carries no warranty.
+## Design choices
 
+### Why multiple evidence sources?
+
+A single sentiment or technical signal is easy to overfit or overinterpret. The project intentionally combines heterogeneous evidence so their contribution can be measured independently.
+
+### Why LangGraph?
+
+Each research stage writes explicit fields into a shared state object, which makes orchestration and intermediate evidence inspectable. The current graph is intentionally straightforward; richer routing is part of the roadmap below.
+
+### Why cache model/data calls?
+
+Historical experimentation can otherwise become slow and expensive. News and SEC analysis are cached so repeated evaluations can reuse the same information.
+
+## Known limitations
+
+This repository is an experimental research system and still has important limitations:
+
+- the current graph is primarily sequential rather than parallel/conditional
+- historical data retrieval needs stricter point-in-time guarantees before backtest results should be treated as robust
+- several external APIs impose rate limits and availability constraints
+- final recommendations are generated by an LLM and can be unstable
+- the existing evaluation records future prices but does not yet provide a complete portfolio-performance framework
+
+## Roadmap
+
+Planned improvements include:
+
+- parallel specialist branches for technical, news, insider, peer and SEC research
+- conditional routing when evidence is missing or stale
+- an evidence aggregator and critic stage before final synthesis
+- explicit confidence / disagreement handling
+- strict point-in-time data controls to eliminate historical leakage
+- richer metrics for directional accuracy, calibration and baseline comparison
+- macroeconomic, options and sector-context analysis
+- stronger provider abstraction across Gemini, OpenAI and other model backends
+- CI, structured outputs, tracing and broader test coverage
+- lightweight API/demo layer for interactive research
+
+## Disclaimer
+
+This project is for research and educational use only. It is not investment advice and should not be used as the sole basis for financial decisions.
